@@ -781,25 +781,26 @@ http://127.0.0.1;evil.com
 
 1. 直接使用请求头
 
-   | Header 名称                 | 用途 / 含义                        | 可能影响或用途                            | 常见受影响中间件 / 服务              | 风险说明                            |
-   | --------------------------- | ---------------------------------- | ----------------------------------------- | ------------------------------------ | ----------------------------------- |
-   | `Host`                      | HTTP 请求目标域名                  | 控制目标主机地址，欺骗后端或代理          | nginx、Apache、Node.js、Python WSGI  | 控制实际请求目标或触发内部路由      |
-   | `X-Host`                    | 非标准字段，有些框架错误使用       | 替代 Host 头欺骗请求目标                  | Express.js、某些 Node.js 应用        | 可用作 Host 的备选值                |
-   | `X-Forwarded-For`           | 表示原始客户端 IP                  | 可伪造为 127.0.0.1 绕过内网 IP 检测       | nginx、Traefik、Spring Cloud Gateway | 判断来源是否为内网，伪造可提权      |
-   | `X-Real-IP`                 | 表示真实客户端 IP                  | 与 `X-Forwarded-For` 类似                 | nginx、Apache                        | 被用于认证/日志审计，伪造可绕过限制 |
-   | `X-Forwarded-Host`          | 表示原始请求的 Host                | 可影响反代重定向目标                      | nginx、Apache、Spring                | SSRF 到重定向目标可能被控制         |
-   | `X-Forwarded-Proto`         | 表示原始协议（http/https）         | 控制后端行为（如是否启用 HTTPS 安全跳转） | nginx、Spring Boot                   | 某些服务会根据协议切换行为          |
-   | `Forwarded`                 | 标准化头部：proto, for, host       | 代替多个 X-Forwarded- 系列字段            | Envoy、Traefik、Caddy                | 可被解析为来源或目标控制            |
-   | `X-Original-URL`            | 某些代理中记录原始 URL             | 可被后端服务器使用作为实际访问路径        | IIS、某些 Node.js 代理               | 可伪造 URL 实现重写                 |
-   | `X-Rewrite-URL`             | 与 `X-Original-URL` 类似           | URL 重写相关                              | IIS、Tomcat                          | SSRF 中可能重写访问地址             |
-   | `X-Custom-IP-Authorization` | 某些定制逻辑判断是否授权 IP        | 可伪造为 127.0.0.1                        | 定制业务逻辑                         | 常见于业务层 SSRF 绕过              |
-   | `True-Client-IP`            | Akamai/CDN 用于识别真实客户端 IP   | 可用于伪造原始请求来源 IP                 | Akamai、Cloudflare、Fastly           | 源地址判断绕过                      |
-   | `Via`                       | 表示请求经过哪些代理节点           | 有些服务根据此字段判定是否允许请求        | Varnish、Squid、CDN                  | 被伪造后混淆请求路径信息            |
-   | `Client-IP`                 | 某些 PHP 后端通过该字段判断来源 IP | 可用于绕过白名单检查                      | PHP、旧版本 Laravel 等               | 可绕过 IP 黑名单限制                |
-   | `Proxy`                     | 用于标示是否通过代理               | 旧服务可能依据此字段做逻辑控制            | 某些老旧代理服务                     | 可误导服务认为是内部请求            |
-   | `X-Forwarded-Server`        | 表示最初接收到请求的服务器名       | 可配合其他字段欺骗负载均衡行为            | Load balancer                        | 控制转发行为可能导致 SSRF           |
+   | Header 名称                 | 用途 / 含义                        | 可能影响或用途                            | 常见受影响中间件 / 服务              | 风险说明                                                     |
+   | :-------------------------- | :--------------------------------- | :---------------------------------------- | :----------------------------------- | :----------------------------------------------------------- |
+   | **`Referer`**               | **表示请求的来源页面 URL**         | **用于防盗链、来源分析、CSRF 防护检查等** | **所有 Web 服务器、应用框架、WAF**   | **可被伪造，导致：1. 绕过基于来源的访问控制/防盗链；2. 干扰 CSRF 防护逻辑（如果依赖 Referer 校验）；3. 泄露用户浏览历史（隐私风险）；4. 欺骗服务器执行操作（如误导后台认为请求来自可信来源）** |
+   | `Host`                      | HTTP 请求目标域名                  | 控制目标主机地址，欺骗后端或代理          | nginx、Apache、Node.js、Python WSGI  | 控制实际请求目标或触发内部路由                               |
+   | `X-Host`                    | 非标准字段，有些框架错误使用       | 替代 Host 头欺骗请求目标                  | Express.js、某些 Node.js 应用        | 可用作 Host 的备选值                                         |
+   | `X-Forwarded-For`           | 表示原始客户端 IP                  | 可伪造为 127.0.0.1 绕过内网 IP 检测       | nginx、Traefik、Spring Cloud Gateway | 判断来源是否为内网，伪造可提权                               |
+   | `X-Real-IP`                 | 表示真实客户端 IP                  | 与 `X-Forwarded-For` 类似                 | nginx、Apache                        | 被用于认证/日志审计，伪造可绕过限制                          |
+   | `X-Forwarded-Host`          | 表示原始请求的 Host                | 可影响反代重定向目标                      | nginx、Apache、Spring                | SSRF 到重定向目标可能被控制                                  |
+   | `X-Forwarded-Proto`         | 表示原始协议（http/https）         | 控制后端行为（如是否启用 HTTPS 安全跳转） | nginx、Spring Boot                   | 某些服务会根据协议切换行为                                   |
+   | `Forwarded`                 | 标准化头部：proto, for, host       | 代替多个 X-Forwarded- 系列字段            | Envoy、Traefik、Caddy                | 可被解析为来源或目标控制                                     |
+   | `X-Original-URL`            | 某些代理中记录原始 URL             | 可被后端服务器使用作为实际访问路径        | IIS、某些 Node.js 代理               | 可伪造 URL 实现重写                                          |
+   | `X-Rewrite-URL`             | 与 `X-Original-URL` 类似           | URL 重写相关                              | IIS、Tomcat                          | SSRF 中可能重写访问地址                                      |
+   | `X-Custom-IP-Authorization` | 某些定制逻辑判断是否授权 IP        | 可伪造为 127.0.0.1                        | 定制业务逻辑                         | 常见于业务层 SSRF 绕过                                       |
+   | `True-Client-IP`            | Akamai/CDN 用于识别真实客户端 IP   | 可用于伪造原始请求来源 IP                 | Akamai、Cloudflare、Fastly           | 源地址判断绕过                                               |
+   | `Via`                       | 表示请求经过哪些代理节点           | 有些服务根据此字段判定是否允许请求        | Varnish、Squid、CDN                  | 被伪造后混淆请求路径信息                                     |
+   | `Client-IP`                 | 某些 PHP 后端通过该字段判断来源 IP | 可用于绕过白名单检查                      | PHP、旧版本 Laravel 等               | 可绕过 IP 黑名单限制                                         |
+   | `Proxy`                     | 用于标示是否通过代理               | 旧服务可能依据此字段做逻辑控制            | 某些老旧代理服务                     | 可误导服务认为是内部请求                                     |
+   | `X-Forwarded-Server`        | 表示最初接收到请求的服务器名       | 可配合其他字段欺骗负载均衡行为            | Load balancer                        | 控制转发行为可能导致 SSRF                                    |
 
-2. CRLF间接导入请求头
+1. CRLF间接导入请求头
 
    ```
    http://evil.com%0d%0aHost:%20127.0.0.1
@@ -810,3 +811,29 @@ http://127.0.0.1;evil.com
 
 1. SNI的出现就是为了解决同一个IP下有多个域名的问题，这个字段决定了在DNS解析之后，到底访问的是这个IP的那个域名，因此SNI字段只能是域名
 2. 有些服务器只检测URL、请求头，忽视了SNI，那么SNI换成hacker.com，即可绕过域名检测
+
+## 三、实践总结
+
+#### 注入点：
+
+1. 不是url重定向处，但是利用url重定向
+
+   ```
+   GET /product/nextProduct?currentProductId=5&path=http://localhost/admin HTTP/2
+   ```
+
+   ```
+   stockApi=%2Fproduct%2Fstock%2Fcheck%3FproductId%3D5%26storeId%3D1%26path%3D=http://localhost/admin
+   ```
+
+2. Collaborator everywhere 寻找注入点
+
+#### 半自动化:
+
+1. 观察是否存在url
+
+2. 使用Collaborator everywhere，扫出隐性入口
+
+   ![image-20250708111842291](C:\Users\33940\AppData\Roaming\Typora\typora-user-images\image-20250708111842291.png)
+
+3. 使用ssrfmap扫
