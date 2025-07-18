@@ -52,9 +52,9 @@ php复制编辑$_FILES["fileToUpload"] = array(
    2、模仿流量检测（基于规则或AI算法）
    ```
 
-# 二、原生
+# 二、原生安全
 
-### 1、弱比较（in_array、array_search、==、switch）
+## 1、弱比较（in_array、array_search、==、switch）
 
 #### in_array:
 
@@ -74,7 +74,7 @@ in_array(7shell.php，range(1,24))；
 
 7shell.php会强制转换为7，从而绕过文件名检测！
 
-### 2、htmlspecialchars可被XSS伪协议绕过
+## 2、htmlspecialchars可被XSS伪协议绕过
 
 [**htmlspecialchars** ](http://php.net/manual/zh/function.htmlspecialchars.php)：(PHP 4, PHP 5, PHP 7)
 
@@ -90,7 +90,7 @@ in_array(7shell.php，range(1,24))；
 > (大于号)  ===============  &gt;
 ```
 
-### 3、文件
+## 3、文件
 
 #### 包含：class_exists()->__autoload、include/include_once、require/require_once
 
@@ -109,7 +109,7 @@ in_array(7shell.php，range(1,24))；
 
 #### 上传：move_uploaded_file
 
-### 7、parse_str、$$、$_GLOABLS、extract-> 变量覆盖
+## 4、parse_str、$$、$_GLOABLS、extract-> 变量覆盖
 
 #### 一、parse_str
 
@@ -144,7 +144,7 @@ extract(array $array, int $flags = EXTR_OVERWRITE, string $prefix = ""): int
 | :--------------- | :--- | :--------------------------- |
 | `EXTR_OVERWRITE` | 0    | 默认，如有冲突则覆盖已有变量 |
 
-### 8、代码执行（eval，assert，preg_replace(php<5.6)，create_function、文件包含函数)
+## 5、代码执行（eval，assert，preg_replace(php<5.6)，create_function、文件包含函数)
 
 > [**preg_replace**](http://php.net/manual/zh/function.preg-replace.php)：(PHP 5.5)
 >
@@ -157,9 +157,9 @@ extract(array $array, int $flags = EXTR_OVERWRITE, string $prefix = ""): int
 - **$pattern** 存在 **/e** 模式修正符，允许代码执行
 - **/e** 模式修正符，是 **preg_replace() ** 将 **$replacement** 当做php代码来执行
 
-### 9、命令执行（exec，system，passthru，popen，shell_exec，pcntl_exec）
+## 6、命令执行（exec，system，passthru，popen，shell_exec，pcntl_exec）
 
-### 10、双写绕过（preg_replace、str_replace）
+## 7、双写绕过（preg_replace、str_replace）
 
 [str_replace ](http://php.net/manual/zh/function.str-replace.php)：(PHP 4, PHP 5, PHP 7)
 
@@ -179,43 +179,13 @@ str_replace(数组1，数组2，字符串1)：将字符串1中出现的所有数
 
 例如攻击者使用payload：**....//** 或者 **..././** ，在经过程序的 **str_replace** 函数处理后，都会变成 **../**
 
-### 11、继续执行漏洞
+## 8、继续执行漏洞
 
 ![image-20250626185209758](C:\Users\33940\AppData\Roaming\Typora\typora-user-images\image-20250626185209758.png)
 
 关键在header，它不会阻止程序继续执行到，11行。
 
-### 12、反序列化
-
-##### source: 	unserialize
-
-##### 跳板:
-
-```
-__wakeup() //使用unserialize时触发
-__sleep() //使用serialize时触发
-__destruct() //对象被销毁时触发
-__call() //在对象上下文中调用不可访问的方法时触发
-__callStatic() //在静态上下文中调用不可访问的方法时触发
-__get() //用于从不可访问的属性读取数据
-__set() //用于将数据写入不可访问的属性
-__isset() //在不可访问的属性上调用isset()或empty()触发
-__unset() //在不可访问的属性上使用unset()时触发
-__toString() //把类当作字符串使用时触发
-__invoke() //当脚本尝试将对象调用为函数时触发
-```
-
-##### sink：
-
-| **代码/命令执行** | `eval()`, `assert()`, `system()`, `exec()`, `passthru()`, `popen()`, `shell_exec()`, `proc_open()`, ``反引号`` |
-| ----------------- | ------------------------------------------------------------ |
-| **文件操作**      | `file_get_contents()`, `file_put_contents()`, `fopen()/fwrite()`, `unlink()`, `copy()`, `rename()` |
-| **文件包含**      | `include()`, `require()`, `include_once()`, `require_once()` |
-| **数据库操作**    | `mysqli_query()`, `PDO::exec()`（SQL 注入）                  |
-| **回调函数**      | `call_user_func()`, `call_user_func_array()`, `array_map()`  |
-| **XXE/SSRF**      | `simplexml_load_string()`（XXE）, `curl_exec()`（SSRF）      |
-
-### 14、htmlentities 绕过过滤
+## 10、htmlentities 绕过过滤
 
 > [htmlentities](http://php.net/manual/zh/function.htmlentities.php) — 将字符转换为 HTML 转义字符
 >
@@ -231,7 +201,7 @@ __invoke() //当脚本尝试将对象调用为函数时触发
 - ENT_QUOTES：两种引号都转换。
 - ENT_NOQUOTES：两种引号都不转换。
 
-### 15、addslashes（配合反斜杠截断）
+## 11、addslashes（配合反斜杠截断）
 
 [addslashes](http://php.net/manual/zh/function.addslashes.php) — 使用反斜线引用字符串
 
@@ -246,7 +216,7 @@ string addslashes ( string $str )
 1. 字符型sql，之前存在n个输入字符截断，让它截断\后的"/'
 2. 后续还存在url解码，并且继续深入过滤，并且存在使用\绕过的过滤，使用这个\ + 双url编码
 
-### 17、$_SERVER['PHP_SELF']
+## 12、$_SERVER['PHP_SELF']
 
 `$_SERVER['PHP_SELF']` 是一个 **超级全局变量**，表示当前执行脚本的路径（相对于网站根目录）。
 
@@ -267,56 +237,146 @@ string addslashes ( string $str )
 
 $_SERVER['SCRIPT_NAME']` 始终只返回 `/index.php
 
-### 18、is_array+implode -> sqli
+## 13、is_array+implode -> sqli
 
 ![image-20250627104235094](C:\Users\33940\AppData\Roaming\Typora\typora-user-images\image-20250627104235094.png)
 
+## 14、反序列化
+
+#### 序列化数据识别：
+
+```
+<?php
+class Example {
+    public $public = "public data";
+    protected $protected = "protected data";
+    private $private = "private data";
+}
+
+$obj = new Example();
+echo serialize($obj);
+?>
+```
+
+```
+O:7:"Example":3:{s:6:"public";s:11:"public data";s:12:"\0*\0protected";s:14:"protected data";s:19:"\0Example\0private";s:13:"private data";}
+
+注意：
+	序列化数据中，对于对象是三者属性，规则是不同的，如果在php7.1+，可以忽视，全部按照public来写，不然需要按照各个属性对应的来写，不然反序列化解析不了
+```
+
+#### Source:
+
+```
+原生:
+	1. unserialize
+	2. Phar（类似jar包）
+```
+
+![image-20250713164024119](C:\Users\33940\AppData\Roaming\Typora\typora-user-images\image-20250713164024119.png)
+
+#### Jump:（都是对象中的函数）
+
+```
+原生:
+	无条件：
+		1. __wakeup
+			-> 当使用 unserialize() 时被调用，用于反序列化后的初始化操作
+		2. __destruct
+			-> 销毁对象或脚本结束时被调用
+	有条件：
+            __call	调用不可访问或不存在的方法时被调用
+            __callStatic	调用不可访问或不存在的静态方法时被调用
+            __clone	进行对象 clone 时被调用，用来调整对象的克隆行为
+            __construct	构建对象时被调用
+            __debugInfo	当调用 var_dump() 打印对象时被调用（控制输出内容）适用于 PHP 5.6+ 版本
+            __get	读取不可访问或不存在属性时被调用
+            __invoke	当以函数方式调用对象时被调用 ($obj())
+            __isset	对不可访问或不存在的属性调用 isset() 或 empty() 时被调用
+            __set	当给不可访问或不存在属性赋值时被调用
+            __set_state	当调用 var_export() 导出类时被调用，返回值作为导出结果（静态方法）
+            __sleep	当使用 serialize() 时被调用，用于指定要序列化的属性
+            __toString	当对象被当作字符串使用时被调用 (echo $obj)
+            __unset	对不可访问或不存在的属性进行 unset 时被调用
+```
+
+#### Sink：
+
+```
+__call	调用不可访问或不存在的方法时被调用
+call_user_func	一般 PHP 代码执行都会选择这里
+call_user_func_array	一般 PHP 代码执行都会选择这里
+```
+
+#### 反序列化链：
+
+```
+PHP原生类：（与PHP版本无关，主要看php.ini是否开启了对应类）
+	1. Error/Exception类
+		入口:	unserialize
+		jump: __toString
+		Sink: XSS
+	2. SoapClient
+		入口:	unserialize
+		jump: __Call
+		Sink: SSRF
+```
+
+## 15、SSRF
+
+当 `allow_url_fopen=On`（默认开启）时，这些函数可通过 `http://`、`ftp://` 等协议发起请求：
+
+- **`file_get_contents()`**
+
+  ```
+  $content = file_get_contents($_GET['url']); // 用户输入直接控制URL
+  ```
+
+- **`fopen()` / `fread()` / `fgets()`**
+
+  ```
+  $handle = fopen($_POST['url'], 'r');
+  ```
+
 # 三、TP框架
 
-**挖掘思路：**
+### 1、如何判断版本
 
-1. 观察写法是否采用php原生写法还是tp内置写法
-2. 原生写法，原生代码审计
-3. 内置写法，找历史漏洞
-4. 没有找到，只能挖框架漏洞
+```
+根目录/composer.lock
+```
 
-### 5.0.*框架特点：
+### 2、配置文件：application/config.php、application/database.php
 
-#### 一、配置文件（都在application目录下）:
+```
+#调试开关
 
-1. config.php
+'app_debug'              => true,
+// 应用Trace
+'app_trace'              => true,
+```
 
-   ```
-   #调试开关
-   
-   'app_debug'              => true,
-   // 应用Trace
-   'app_trace'              => true,
-   ```
+```
+#视图层模板配置
 
-   ```
-   #视图层模板配置
-   
-   'template'               => [
-       // 模板引擎类型 支持 php think 支持扩展
-       'type'         => 'Think',
-       // 默认模板渲染规则 1 解析为小写+下划线 2 全部转换小写
-       'auto_rule'    => 1,
-       // 模板路径
-       'view_path'    => '',
-       // 模板后缀
-       'view_suffix'  => 'html',
-       
-   重要：
-   1. 模板路径（
-   	1. 如果固定目录，比如/tamples，那模板文件就需要放在这下面
-   	2. 如果留空，在调用渲染模板的代码对应的controller层的同层View目录下对应控制器名目录下的对应渲染的文件
-   2. 模板后缀（也就是渲染的目标文件类型）
-   ```
+'template'               => [
+    // 模板引擎类型 支持 php think 支持扩展
+    'type'         => 'Think',
+    // 默认模板渲染规则 1 解析为小写+下划线 2 全部转换小写
+    'auto_rule'    => 1,
+    // 模板路径
+    'view_path'    => '',
+    // 模板后缀
+    'view_suffix'  => 'html',
+    
+重要：
+1. 模板路径（
+	1. 如果固定目录，比如/tamples，那模板文件就需要放在这下面
+	2. 如果留空，在调用渲染模板的代码对应的controller层的同层View目录下对应控制器名目录下的对应渲染的文件
+2. 模板后缀（也就是渲染的目标文件类型）
+```
 
-2. database.php
-
-#### 二、PATH_INFO路由关系：（php5.1.*也适用）
+### 3、路由关系
 
 ```
 http://localhost/index.php/Index/Blog/read
@@ -327,44 +387,17 @@ http://localhost/index.php?s=Index&m=Blog&a=read
 其中：/Index/Blog/read = PATH_INFO
 ```
 
-Index： 模块，在application下的目录名
+- Index： 模块，在application下的目录名
 
-Blog：控制器，在控制器目录下的文件名/在该文件下的class名
 
-read：方法，在控制器类下的方法名
+- Blog：控制器，在控制器目录下的文件名/在该文件下的class名
 
-#### 三、获取参数差异
 
-1. 使用助手函数
+- read：方法，在控制器类下的方法名
 
-   ```
-   input('get.id');
-   ```
+### 4、控制器层：application\index\controller
 
-2. 使用封装的Request:instance函数
-
-   ```
-   Request::instance()->get('id'); // 获取某个get变量
-   ```
-
-#### 四、过滤差异
-
-```
-input('get.id/d');
-input('post.name/s');
-input('post.ids/a');
-Request::instance()->get('id/d');
-```
-
-| 修饰符 | 作用                 |
-| :----- | :------------------- |
-| s      | 强制转换为字符串类型 |
-| d      | 强制转换为整型类型   |
-| b      | 强制转换为布尔类型   |
-| a      | 强制转换为数组类型   |
-| f      | 强制转换为浮点类型   |
-
-#### 五、自带模板引擎/VIEW层
+### 5、视图层：application\index\view
 
 1. 配置config.php的模板
 
@@ -397,12 +430,75 @@ Request::instance()->get('id/d');
 
 4. 执行fetch最终效果是，执行到文件包含函数
 
-#### 六、内置安全写法
+### 6、内置方法
+
+
+#### 获取参数差异:
+
+1. 使用助手函数
+
+   ```
+   input('get.id');
+   ```
+
+2. 使用封装的Request:instance函数
+
+   ```
+   Request::instance()->get('id'); // 获取某个get变量
+   ```
+
+#### 过滤差异:
+
+```
+input('get.id/d');
+input('post.name/s');
+input('post.ids/a');
+Request::instance()->get('id/d');
+```
+
+| 修饰符 | 作用                 |
+| :----- | :------------------- |
+| s      | 强制转换为字符串类型 |
+| d      | 强制转换为整型类型   |
+| b      | 强制转换为布尔类型   |
+| a      | 强制转换为数组类型   |
+| f      | 强制转换为浮点类型   |
+
+#### 内置安全写法:
 
 1. TP写法，防护SQLI
 
    ```
    Db::table('think_user')->where('info$.email','thinkphp@qq.com')->find();
    ```
+
+## 7、框架安全
+
+# 四、Laravel框架
+
+### 1、如何判断版本
+
+```
+根目录/composer.lock
+```
+
+### 2、配置文件
+
+````
+根目录/config/
+````
+
+### 3、控制器层：app\Http\Controllers
+
+### 4、视图层：resources\views
+
+### 5、路由关系：routes
+
+### 6、内置方法
+
+---
+
+
+
 
 
